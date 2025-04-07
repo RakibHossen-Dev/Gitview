@@ -1,4 +1,4 @@
-import { Button } from "./ui/button";
+import { MdOutlineDarkMode } from "react-icons/md";
 
 const Navbar = () => {
   return (
@@ -9,7 +9,9 @@ const Navbar = () => {
             Gitview
           </h3>
         </div>
-        <Button className="rounded-full">Search Profile</Button>
+        <button className="rounded-full p-1.5 text-violet-700 border">
+          <MdOutlineDarkMode className="text-2xl" />
+        </button>
       </div>
     </div>
   );
