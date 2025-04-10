@@ -6,7 +6,7 @@ import { MdOutlineEmail } from "react-icons/md";
 import { FaLink } from "react-icons/fa6";
 import { IoCalendarClearSharp } from "react-icons/io5";
 import { CiSearch } from "react-icons/ci";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -19,7 +19,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import Chart from "./components/Chart";
+interface DayCommit {
+  date: string;
+  commit_count: number;
+}
+
 function App() {
   const [userName, setUserName] = useState("");
 
@@ -56,50 +60,82 @@ function App() {
     refetchRepos();
   };
 
-  const chartData = [
-    {
-      name: "Page A",
-      uv: 4000,
-      pv: 2400,
-      amt: 2400,
-    },
-    {
-      name: "Page B",
-      uv: 3000,
-      pv: 1398,
-      amt: 2210,
-    },
-    {
-      name: "Page C",
-      uv: 2000,
-      pv: 9800,
-      amt: 2290,
-    },
-    {
-      name: "Page D",
-      uv: 2780,
-      pv: 3908,
-      amt: 2000,
-    },
-    {
-      name: "Page E",
-      uv: 1890,
-      pv: 4800,
-      amt: 2181,
-    },
-    {
-      name: "Page F",
-      uv: 2390,
-      pv: 3800,
-      amt: 2500,
-    },
-    {
-      name: "Page G",
-      uv: 3490,
-      pv: 4300,
-      amt: 2100,
-    },
-  ];
+  // last 7 days daily commit
+  const [dailyCommits, setDailyCommits] = useState<DayCommit[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDailyCommits = async () => {
+      if (!userName) {
+        setError("GitHub username is missing!");
+        return;
+      }
+
+      try {
+        const sinceDate = new Date();
+        sinceDate.setDate(sinceDate.getDate() - 6); // last 7 days including today
+        sinceDate.setHours(0, 0, 0, 0);
+
+        const untilDate = new Date();
+        untilDate.setHours(23, 59, 59, 999);
+
+        const since = sinceDate.toISOString();
+        const until = untilDate.toISOString();
+
+        const reposResponse = await fetch(
+          `https://api.github.com/users/${userName}/repos`
+        );
+        if (!reposResponse.ok) {
+          throw new Error(`GitHub API error: ${reposResponse.status}`);
+        }
+        const repos = await reposResponse.json();
+
+        const dailyMap: Record<string, number> = {};
+
+        for (let i = 0; i < 7; i++) {
+          const day = new Date(sinceDate);
+          day.setDate(day.getDate() + i);
+          const key = day.toISOString().split("T")[0];
+          dailyMap[key] = 0;
+        }
+
+        for (const repo of repos) {
+          const commitsResponse = await fetch(
+            `https://api.github.com/repos/${userName}/${repo.name}/commits?since=${since}&until=${until}`
+          );
+          if (!commitsResponse.ok) continue;
+
+          const commits = await commitsResponse.json();
+
+          for (const commit of commits) {
+            const date = new Date(commit.commit.author.date)
+              .toISOString()
+              .split("T")[0];
+            if (dailyMap[date] !== undefined) {
+              dailyMap[date]++;
+            }
+          }
+        }
+
+        const formattedData: DayCommit[] = Object.entries(dailyMap).map(
+          ([date, count]) => ({ date, commit_count: count })
+        );
+
+        setDailyCommits(formattedData);
+        setError(null);
+      } catch (err: any) {
+        setError(err.message);
+        setDailyCommits([]);
+      }
+    };
+
+    fetchDailyCommits();
+  }, [userName]);
+
+  const chartData = dailyCommits.map((item) => ({
+    name: item.date,
+    Commit: item.commit_count,
+  }));
   return (
     <div className="max-w-[1200ox] w-11/12 mx-auto px-4 py-10 flex flex-col items-center">
       {/* Search Bar */}
@@ -190,8 +226,7 @@ function App() {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="pv" stackId="a" fill="#8884d8" />
-                  <Bar dataKey="uv" stackId="a" fill="#82ca9d" />
+                  <Bar dataKey="Commit" stackId="a" fill="#82ca9d" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -259,7 +294,6 @@ function App() {
             )}
           </div>
         </div>
-        <Chart username={"RakibHossen-Dev"}></Chart>
       </div>
     </div>
   );
